@@ -104,7 +104,7 @@ function fakeCloud(plan, cfg = config()) {
       }
     }
     else if (u.host === n.storageDomain) return path === '/_health' ? json({ ok: true }) : state.r2.has(path.split('/').at(-1)) ? new Response(state.r2.get(path.split('/').at(-1))) : missing();
-    else if ([n.edgeDomain, `${'0'.repeat(32)}-inkos.${n.appDomain}`].includes(u.host)) return missing();
+    else if ([n.edgeDomain, `${'0'.repeat(32)}-${n.appHostSuffix || 'inkos'}.${n.appDomain}`].includes(u.host)) return missing();
     if (!response) throw Error(`Unexpected fake provider request: ${method} ${u.host}${path}`);
     if (state.lost === path) { state.lost = null; throw Error(`lost response with echoed ${credentials().flyToken}`); }
     return response;
@@ -292,4 +292,31 @@ test('a missing private key file is never regenerated for an existing journal', 
   await assert.rejects(initializeCloudSetup(args), { code: 'ENOENT' });
   await assert.rejects(readFile(join(path, 'secrets.json')), { code: 'ENOENT' });
   assert.equal(await readFile(join(path, 'journal.json'), 'utf8'), journal);
+});
+
+
+test('explicit shared-zone routing uses existing TLS and DNS read-only with a distinct instance route', async t => {
+  const cfg=config();cfg.cloudflare.tls='existing';cfg.cloudflare.appRouting='shared-zone-wildcard';
+  const args={directory:await directory(t),config:cfg,artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan,cfg),n=plan.resources;
+  assert.equal(n.appDomain,cfg.cloudflare.zoneName);assert.match(n.appHostSuffix,/^inkos-[a-f0-9]{16}$/);
+  assert.equal(plan.tls.mayCreateBillableCertificate,false);assert.equal(plan.sharedWildcardDNS.access,'read-only');
+  const shared={id:'shared_dns',name:'*.'+cfg.cloudflare.zoneName,type:'A',content:'192.0.2.8',proxied:true,comment:'existing user resource'};
+  cloud.dns.push(structuredClone(shared));cloud.packs.push({id:'zone_certificate',hosts:[cfg.cloudflare.zoneName,'*.'+cfg.cloudflare.zoneName],status:'active'});
+  const previousRoute={id:'other_route',pattern:'*-inkos.'+cfg.cloudflare.zoneName+'/*',script:'existing_edge'};cloud.routes.push(structuredClone(previousRoute));
+  const result=await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});assert.equal(result.status,'acceptance-pending');
+  assert.deepEqual(cloud.dns,[shared]);assert.deepEqual(cloud.routes[0],previousRoute);
+  assert.equal(cloud.routes[1].pattern,'*-'+n.appHostSuffix+'.'+n.appDomain+'/*');
+  assert.equal(cloud.machines[0].config.env.INK_OS_APP_HOST_SUFFIX,n.appHostSuffix);
+  assert.equal(cloud.workers.get(n.edgeWorker).bindings.find(b=>b.name==='APP_HOST_SUFFIX').text,n.appHostSuffix);
+  assert.ok(!cloud.mutations.some(m=>m.path.endsWith('/dns_records')||m.path.endsWith('/ssl/certificate_packs/order')));
+  const count=cloud.mutations.length;await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});assert.equal(cloud.mutations.length,count);
+  cloud.dns[0].content='192.0.2.9';await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/completed-resource-drift/);
+});
+
+test('shared-zone routing requires existing proxied wildcard and never creates one or purchases certificates', async t => {
+  for(const invalid of [{appRouting:'unknown',tls:'existing'},{appRouting:'shared-zone-wildcard',tls:'order-advanced'}])assert.throws(()=>validateCloudConfig({...config(),cloudflare:{...config().cloudflare,...invalid}}),/cloudflare.appRouting/);
+  const cfg=config();cfg.cloudflare.tls='existing';cfg.cloudflare.appRouting='shared-zone-wildcard';const args={directory:await directory(t),config:cfg,artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan,cfg);
+  cloud.packs.push({id:'zone_certificate',hosts:['*.'+cfg.cloudflare.zoneName],status:'active'});
+  await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/shared-zone-proxied-wildcard-required/);
+  assert.equal(cloud.dns.length,0);assert.ok(!cloud.mutations.some(m=>m.path.endsWith('/dns_records')||m.path.endsWith('/ssl/certificate_packs/order')));
 });

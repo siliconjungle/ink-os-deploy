@@ -11,6 +11,7 @@ const hints = {
   'cloud-state-not-initialized': 'Run plan with these exact explicit paths before apply/resume.',
   'invalid-cloud-config-file': 'Use JSON containing only fly and cloudflare configuration; images need sha256 digest pins and cloudflare.tls must explicitly select existing or order-advanced before planning. Credentials and previous resource IDs are not configuration fields.',
   'cloud-setup-input-or-private-state-error': 'State must be an owned directory with mode 0700 and regular private 0600 files, without symlinks. Preserve journal.json and secrets.json together; inspect operation.lock before explicit crash recovery.',
+  'shared-zone-proxied-wildcard-required': 'The explicitly selected shared-zone mode requires an existing proxied root wildcard DNS record. Setup never creates or alters that shared dependency.',
   'active-app-wildcard-certificate-required': 'The saved plan names the exact generated deeper wildcard that needs an active certificate; ordinary zone Universal SSL does not cover it. Explicit existing mode does not purchase a certificate.',
   'runtime-token-change-requires-explicit-correction': 'Use replace-runtime-credential with the corrected INK_CLOUD_RUNTIME_FLY_TOKEN. The same saved instance is retained; correction is blocked after a machine-create attempt.',
   'runtime-credential-correction-incomplete-repeat-command': 'Repeat replace-runtime-credential with the intended private runtime credential to complete its interrupted private-file update.',

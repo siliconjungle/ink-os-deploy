@@ -360,3 +360,5 @@ test('new Machine JSON health probes use supported service checks and provider m
     else assert.equal((await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch})).status,'acceptance-pending');
   }
 });
+
+test('fresh hosted provisioning accepts the three distribution apps and preserves them through storage acceptance',async t=>{const path=await directory(t),args={directory:path,config:config(),artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan);for(const slug of ['finder','preview','ink-environment'])cloud.apps.push({id:createHash('sha256').update('ink-os-app:'+slug).digest('hex').slice(0,32),kind:'app',archived:false,body:JSON.stringify({slug,repository:'https://github.com/siliconjungle/ink-app-'+slug,sourceCommit:'a'.repeat(40),releaseId:'b'.repeat(32)})});const before=structuredClone(cloud.apps),result=await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});assert.equal(result.acceptance.defaultCatalog,'passed');assert.equal(result.acceptance.emptyCatalog,'default-apps-only');assert.deepEqual(cloud.apps,before);assert.equal(result.acceptance.storageRoundtrip,'passed-and-cleaned');});

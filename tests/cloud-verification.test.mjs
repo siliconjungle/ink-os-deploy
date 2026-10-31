@@ -195,7 +195,7 @@ integration('lost create resumes the same verifier-owned canary and no storage a
 
 integration('new selected verifier sources require a new completed attempt and cannot replace an active binding', async t => {
   const f = await fixture(t), selected = join(f.directory, 'selected-platform');
-  const files = ['scripts/verify-cloud-host.mjs', 'sdk/src/server.js', 'sdk/src/projects.js', 'sdk/src/workflows.js', 'sdk/src/commands.js', 'sdk/src/live-query.js', 'sdk/src/app-api.js', 'sdk/src/ink-previews.js', 'sdk/src/backups.js', 'shared/continuation.mjs'];
+  const files = ['scripts/verify-cloud-host.mjs', 'sdk/src/server.js', 'sdk/src/projects.js', 'sdk/src/workflows.js', 'sdk/src/commands.js', 'sdk/src/live-query.js', 'sdk/src/app-api.js', 'sdk/src/ink-previews.js', 'sdk/src/backups.js', 'shared/continuation.mjs', 'shared/distribution-apps.mjs'];
   for (const path of files) {
     const target = join(selected, path); await mkdir(join(target, '..'), { recursive: true });
     const source = await readFile(join(platformRoot, path), 'utf8');

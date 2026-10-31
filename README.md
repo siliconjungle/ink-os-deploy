@@ -1,6 +1,6 @@
 # Ink OS deployment
 
-Container and cloud deployment tooling for a clean Ink OS instance. Installations start with zero apps.
+Container and cloud deployment tooling for a clean Ink OS instance. Installations start with Finder, Preview and Ink Environment.
 
 With the platform checkout next to this repository:
 
@@ -8,7 +8,7 @@ With the platform checkout next to this repository:
 docker compose up --build -d --wait
 ```
 
-The local container desktop is configured for `http://os.ink.localhost:8080`. Private instance credentials live in the named data volume. App releases have separate hostnames routed through the platform gateway. The setup builds its backend runtime image and starts with zero installed apps.
+The local container desktop is configured for `http://os.ink.localhost:8080`. Private instance credentials live in the named data volume. App releases have separate hostnames routed through the platform gateway. The setup builds its backend runtime image and starts with Finder, Preview and Ink Environment.
 
 The OS container uses the Docker Engine socket to manage isolated app containers; app containers do not receive the socket. On Docker Desktop, set `INK_OS_DOCKER_SOCKET` if its socket is outside `/var/run/docker.sock`. Use distinct `COMPOSE_PROJECT_NAME`, `INK_OS_PORT` and `INK_OS_DOCKER_NETWORK` values for multiple installations.
 
@@ -66,7 +66,7 @@ npm run cloud -- resume --config cloud.json --state .local/cloud/new-instance --
 
 Private state uses an owned directory with mode `0700` and regular `0600` files. Retain `journal.json` and `secrets.json` together securely: they contain recovery state, owner/runtime credentials and the instance encryption key. Declare any alternate retained state path in `storage-retention.json`. Plans, status, progress and structured errors omit secret values. Never commit or publish this directory. Lost resource-create replies are reconciled by generated identity; ambiguous absent creates require explicit provider reconciliation through the library API. Lock recovery checks that its recorded process has exited.
 
-Provisioning first ends at **`acceptance-pending`**. It requires strict OS identity, an authenticated empty app catalog, working HTTPS/Worker endpoints and an exact OS-to-R2 write/read/delete proof with cleanup. Provisioning itself installs no canary apps. Once every provisioning step is complete, repeated `apply`/`resume` are offline status operations: they preserve recorded acceptance and do not replay the initial empty-catalog check after you install apps. An explicitly supplied different runtime token is still rejected locally; repeating apply never rotates it. Status labels are historical and state `liveAudit: "not-performed"`; they do not audit current health/provider drift or perform maintenance. Infrastructure deletion/rollback, image builds/uploads, upgrades and post-start credential rotation require separate operations.
+Provisioning first ends at **`acceptance-pending`**. It requires strict OS identity, an authenticated default-only app catalog, working HTTPS/Worker endpoints and an exact OS-to-R2 write/read/delete proof with cleanup. Provisioning itself installs no canary apps. Once every provisioning step is complete, repeated `apply`/`resume` are offline status operations: they preserve recorded acceptance and do not replay the initial default-catalog check after you install apps. An explicitly supplied different runtime token is still rejected locally; repeating apply never rotates it. Status labels are historical and state `liveAudit: "not-performed"`; they do not audit current health/provider drift or perform maintenance. Infrastructure deletion/rollback, image builds/uploads, upgrades and post-start credential rotation require separate operations.
 
 ### Hosted acceptance
 
@@ -76,9 +76,9 @@ Run acceptance before installing any apps. `verify` executes `verifyCloudHost` f
 npm run cloud -- verify --phase run --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
 ```
 
-This creates one journal-owned backend canary, checks invocation/state, independent authenticated app origins and private source paths, then waits for quiescence and purges only its own app/source data. It refuses a nonempty initial catalog, including archived apps. Successful cleanup records `pooledBackendCanary: "passed"` and leaves restart persistence pending. A missing storage deletion acknowledgement leaves acceptance pending even if the app is absent; repeat the explicit verification command for a fresh guarded attempt. Interrupted calls reuse the private canary journal instead of creating duplicates. `verify --phase cleanup` is the explicit recovery operation for an unfinished attempt; it preserves unrelated apps and busy workers.
+This creates one journal-owned backend canary, checks invocation/state, independent authenticated app origins and private source paths, then waits for quiescence and purges only its own app/source data. It refuses a initial catalog containing anything beyond the three distribution apps, including archived user apps. Successful cleanup records `pooledBackendCanary: "passed"` and leaves restart persistence pending. A missing storage deletion acknowledgement leaves acceptance pending even if the app is absent; repeat the explicit verification command for a fresh guarded attempt. Interrupted calls reuse the private canary journal instead of creating duplicates. `verify --phase cleanup` is the explicit recovery operation for an unfinished attempt; it preserves unrelated apps and busy workers.
 
-To include restart persistence, use this instead of the first command, or after a backend-only proof while the computer is still empty:
+To include restart persistence, use this instead of the first command, or after a backend-only proof before installing additional apps:
 
 ```sh
 npm run cloud -- verify --phase prepare-restart --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
@@ -101,7 +101,7 @@ npm run cloud -- verify --phase resume --restart-receipt /private/restart.json -
 npm run cloud -- status --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
 ```
 
-Resume reads the existing canary state without replaying its write, then verifies zero remaining apps and source assets before recording **`ready`**, with `restartPersistence: "passed-with-external-attestation"`. This label distinguishes externally attested restart execution from the verifier's own state/read/cleanup checks; the health API has no process-generation proof. Retain the external evidence, private receipt and entire state directory, including `hosted-verification/`, together. Completed verification is historical evidence with a recorded timestamp/source hash. Use `status` after completion; verification refuses to rerun an accepted attempt against a computer that may now contain personal apps. These checks do not establish graphical browser behavior or ongoing maintenance health.
+Resume reads the existing canary state without replaying its write, then verifies removal of its own canary and source assets while preserving the default apps before recording **`ready`**, with `restartPersistence: "passed-with-external-attestation"`. This label distinguishes externally attested restart execution from the verifier's own state/read/cleanup checks; the health API has no process-generation proof. Retain the external evidence, private receipt and entire state directory, including `hosted-verification/`, together. Completed verification is historical evidence with a recorded timestamp/source hash. Use `status` after completion; verification refuses to rerun an accepted attempt against a computer that may now contain personal apps. These checks do not establish graphical browser behavior or ongoing maintenance health.
 
 For a zone that already has an active root wildcard certificate and a proxied `*.YOUR-ZONE` DNS record, set `cloudflare.appRouting` to `shared-zone-wildcard` and `cloudflare.tls` to `existing`. The plan uses a generated instance suffix in first-level app hostnames and a distinct Worker route. The shared DNS record and certificate remain read-only dependencies; setup refuses missing, unproxied or changed DNS instead of creating/replacing it. This mode requires the selected platform image and edge Worker to support `INK_OS_APP_HOST_SUFFIX` / `APP_HOST_SUFFIX`. Dedicated routing remains available with a separate deeper wildcard certificate.
 
@@ -180,3 +180,5 @@ npm run cloud -- upgrade cancel --operation RETURNED_OPERATION_ID --config cloud
 Cancellation validates the exact started source machine/configuration/version under an exclusive Fly lease, authenticates the saved instance, and asks its maintenance API to reopen admission. Active work can continue; cancellation never stops a host or worker. A sealed gate, changed source, bootstrap mode or attempted update blocks cancellation and keeps the operation selected. A definite API refusal leaves the same operation available for upgrade resume. After an ambiguous or lost cancellation reply, retry **`upgrade cancel` with the same operation**, because ordinary upgrade resume cannot safely infer whether admission reopened. A lost reply reconciles the actual cancelled receipt; retained private proof permits recovery of interrupted local writes.
 
 The private per-operation `cancellation.json` is written before clearing the active pointer, and `current-images.json` retains its separately hash-bound `lastCancellation`. Status revalidates this historical proof without claiming current health. Cancellation preserves image generation, original provisioning and prior successful image lineage; a fresh explicit upgrade plan can follow. Retain cancellation evidence with the other private operation files. The CLI never automatically cancels or forces admission open.
+
+Fresh hosted acceptance accepts either the three unmodified distribution apps or an explicitly empty installation. It rejects additional/archived user apps. Canary verification binds and preserves the default app release/source identities and removes only its own canary. Existing historical acceptance receipts retain their original meaning.

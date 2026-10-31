@@ -1,0 +1,8 @@
+{
+  "name": "@ink-os/deploy",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": { "up": "docker compose up --build -d", "logs": "docker compose logs -f", "check": "node scripts/check.mjs" }
+}

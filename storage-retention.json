@@ -1,0 +1,4 @@
+{
+  "keep": { "compose.yaml": "Container deployment definition.", "scripts": "Deployment tooling and checks." },
+  "safe_to_remove": {}
+}

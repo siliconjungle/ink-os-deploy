@@ -7,7 +7,7 @@
     "README.md": "Container/cloud setup contract, explicit TLS choice and remaining acceptance gates.",
     "LICENSE": "Required license notice.",
     ".gitignore": "Protects generated/private deployment state from publication.",
-    "cli/cloud.mjs": "Explicit cloud planning/provisioning/resume/status and private credential correction CLI.",
+    "cli/cloud.mjs": "Explicit cloud planning/provisioning/upgrade/cancellation/status and private credential correction CLI.",
     "lib/cloud-config.mjs": "Validated fresh resource identities and immutable public plans.",
     "lib/cloud-contract.mjs": "Selected official API sources and exact account/image/domain acceptance prerequisites.",
     "lib/cloud-private.mjs": "Private durable state and safe process-lock recovery.",
@@ -18,7 +18,12 @@
     "tests/cloud-setup.test.mjs": "Provider/recovery/credential/TLS/state/acceptance regression proofs.",
     ".local/cloud/new-instance": "Operator-created private journal/credentials at the documented destination; protected recovery inputs, never a disposable build output.",
     "lib/cloud-verification.mjs": "Selected-source hosted verifier, bound historical acceptance and crash-safe private receipts.",
-    "tests/cloud-verification.test.mjs": "Actual owner SDK/verifier/edge integration, replay and cleanup gates with explicit platform input."
+    "tests/cloud-verification.test.mjs": "Actual owner SDK/verifier/edge integration, replay and cleanup gates with explicit platform input.",
+    "lib/cloud-upgrades.mjs": "Bound image upgrade/cancellation intents, exact provider lease/CAS reconciliation, bootstrap evidence and current-image lineage.",
+    "tests/cloud-upgrades.test.mjs": "Provider-contract, cancellation/stop races and recovery, active-work preservation, image lineage and restart/evidence regression proofs.",
+    "tests/cloud-upgrade-cli.test.mjs": "Actual CLI upgrade/cancellation lifecycle, private credentials, immutable provisioning and generation-aware historical readiness proofs.",
+    ".local/cloud/new-instance/current-images.json": "Operator-owned current image generation and separately proof-bound lastCancellation lineage; never disposable output.",
+    ".local/cloud/new-instance/upgrades": "Operator-owned immutable upgrade intents, private progress/leases and retained transition/bootstrap/cancellation evidence and receipts."
   },
   "safe_to_remove": {}
 }

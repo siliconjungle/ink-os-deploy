@@ -29,6 +29,7 @@ test('actual standalone CLI plans and reports status offline without any credent
   const result = spawnSync(process.execPath, [cli, 'plan', ...f.args], { env: {}, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr); const plan = JSON.parse(result.stdout);
   assert.equal(plan.ok, true); assert.equal(plan.deployment.status, 'planned'); assert.equal(plan.deployment.tls.mode, 'existing');
+  assert.equal(plan.deployment.generation, 0); assert.deepEqual(plan.deployment.currentImages, plan.deployment.images); assert.equal(plan.deployment.activeUpgrade, null);
   assert.ok(plan.prerequisites.some(value => value.includes('OCI images')));
   const described = await f.invoke('status', { fetch() { throw Error('status must not access network'); } });
   assert.equal(described.status, 0); assert.equal(described.result.deployment.instanceId, plan.deployment.instanceId);
@@ -115,5 +116,6 @@ test('package commands and documented cloud JSON execute the actual offline CLI 
   const cli = fileURLToPath(new URL('../' + metadata.bin['ink-os-cloud'], import.meta.url));
   const help = spawnSync(process.execPath, [cli, '--help'], { env: {}, encoding: 'utf8' }); assert.equal(help.status, 0, help.stderr);
   const contract = JSON.parse(help.stdout); for (const command of ['plan', 'apply', 'resume', 'status', 'replace-runtime-credential', 'verify', 'prepare-restart', '--restart-receipt']) assert.ok(contract.usage.includes(command));
+  assert.deepEqual(contract.upgradeActions, ['plan', 'run', 'resume', 'status', 'cancel', 'abandon']);
   if (process.platform !== 'win32') assert.equal((await stat(cli)).mode & 0o111, 0o111);
 });

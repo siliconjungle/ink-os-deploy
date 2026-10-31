@@ -104,3 +104,60 @@ npm run cloud -- status --config cloud.json --state .local/cloud/new-instance --
 Resume reads the existing canary state without replaying its write, then verifies zero remaining apps and source assets before recording **`ready`**, with `restartPersistence: "passed-with-external-attestation"`. This label distinguishes externally attested restart execution from the verifier's own state/read/cleanup checks; the health API has no process-generation proof. Retain the external evidence, private receipt and entire state directory, including `hosted-verification/`, together. Completed verification is historical evidence with a recorded timestamp/source hash. Use `status` after completion; verification refuses to rerun an accepted attempt against a computer that may now contain personal apps. These checks do not establish graphical browser behavior or ongoing maintenance health.
 
 For a zone that already has an active root wildcard certificate and a proxied `*.YOUR-ZONE` DNS record, set `cloudflare.appRouting` to `shared-zone-wildcard` and `cloudflare.tls` to `existing`. The plan uses a generated instance suffix in first-level app hostnames and a distinct Worker route. The shared DNS record and certificate remain read-only dependencies; setup refuses missing, unproxied or changed DNS instead of creating/replacing it. This mode requires the selected platform image and edge Worker to support `INK_OS_APP_HOST_SUFFIX` / `APP_HOST_SUFFIX`. Dedicated routing remains available with a separate deeper wildcard certificate.
+
+### Image upgrades
+
+Keep the original `cloud.json`, Worker sources and provisioning journal unchanged. Upgrade targets are a separate explicit pair of published image digest pins. Upgrades affect the OS image and global pooled runtime default; they do not publish images, deploy Workers, rotate credentials or rewrite app releases.
+
+```sh
+npm run cloud -- upgrade plan --os-image registry.example.com/ink/os@sha256:2222222222222222222222222222222222222222222222222222222222222222 --runtime-image registry.example.com/ink/runtime@sha256:3333333333333333333333333333333333333333333333333333333333333333 --mode automatic --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+npm run cloud -- upgrade status --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+Replace the example pins and `RETURNED_OPERATION_ID` below with the selected images and the plan's full operation ID. Planning and status are offline. `run`, `resume` and `cancel` consume only the explicit private `INK_CLOUD_FLY_TOKEN`; the owner credential is loaded from the saved private instance state. Management credentials, owner credentials and lease nonces are never printed. A different explicitly supplied runtime token is rejected locally; upgrading does not rotate it.
+
+```sh
+npm run cloud -- upgrade run --operation RETURNED_OPERATION_ID --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+npm run cloud -- upgrade resume --operation RETURNED_OPERATION_ID --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+Automatic upgrades require a host image that implements authenticated, durable maintenance admission and reports image provenance from `INK_OS_IMAGE_PIN` / `INK_OS_RUNTIME_IMAGE`. The host closes external admission while admitted work finishes naturally. Pool continuations may remain available while draining; the final quiescent receipt must close pool admission and prove all operations/holds are zero and old idle global-runtime slots retired. Busy, held or uncertain workers block progress. Live release pins that would recreate the retiring global image also block; publish updated releases separately. Intentional custom runtime images such as Codex/ffmpeg remain unchanged, are inventoried in the receipt, and need separate rebuild/base-update and compatibility acceptance.
+
+Only after quiescence does the library lease and revalidate the selected machine, durably seal source-host stop authorization, stop the idle OS, apply a version-checked full configuration with unchanged volume/environment bindings, and start the target image. Sealing permanently refuses source cancellation for that operation, closing the cancellation/stop race. Lost seal replies resume the same idempotent handshake; lost update replies are reconciled against exact observed target configuration and operation identity. It never force-stops workers or deletes apps. `waiting-for-quiescence` is a normal resumable result; allow work to finish rather than forcing it. A host without the gate/provenance cannot use automatic mode, and the tool does not stop it.
+
+For the first upgrade of such an older host, explicitly select `--mode external-stopped-bootstrap`, keep `--runtime-image` equal to the exact current global runtime digest, and choose the new OS digest. Bootstrap is OS-only. It requires independently retained quiescence observations and a provider-observed **already stopped** OS and mapped pool machines; the library never stops the legacy host or its workers. The observations must include the selected instance's health identity, the nine zero activity counts named by `CLOUD_UPGRADE_ACTIVITY`, and full idle public pool slots. Save the observations as a private `0600` JSON file:
+
+```json
+{
+  "format": "ink-cloud-bootstrap-observations-v1",
+  "instanceId": "RETURNED_INSTANCE_ID",
+  "observedAt": "ACTUAL_OBSERVATION_ISO_TIME",
+  "health": { "ok": true, "instanceId": "RETURNED_INSTANCE_ID" },
+  "activity": { "requests": 0, "writers": 0, "publications": 0, "workflows": 0, "schedules": 0, "nativeJobs": 0, "codeTasks": 0, "poolAssignments": 0, "poolRequests": 0 },
+  "pool": { "slots": [] }
+}
+```
+
+An empty slots array is valid only when the observed pool is empty. Otherwise include every observed slot with its `slotId`, `kind`, `status: "idle"`, null `appId`/`releaseId`/`leaseId`, zero `inFlight`, empty `holds`, and any `machineId`/`backendMachineId`. Provider inventory must match those owned stopped machines. The receipt is another private JSON file with `format: "ink-cloud-bootstrap-quiescence-v1"`, the plan's `operationId`, `challenge`, `instanceId`, the exact `machineId`/`observedVersion`, `fromImages`, an actual ISO `completedAt`, `evidenceSha256` of the observation file's exact bytes, and `limitationAcknowledged: "external-quiescence-not-automatically-verified"`. Observation time must follow planning and precede completion. Retain actual observations; do not manufacture an idle receipt. This external attestation is deliberately distinct from automatic drain proof.
+
+```sh
+npm run cloud -- upgrade run --operation RETURNED_OPERATION_ID --bootstrap-receipt /private/bootstrap-receipt.json --bootstrap-evidence /private/bootstrap-observations.json --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+The private `current-images.json` and `upgrades/` directory retain image generation, intent, progress, raw bootstrap evidence and hash-bound receipts. Keep them with the original private state. `status` revalidates that lineage and shows `generation`, `currentImages` and `activeUpgrade`. For later generations, original `ready`/canary results appear only under `historicalProvisioning`, labeled `historical-original-provisioning`. Current acceptance is **`post-upgrade-runtime-use-pending`**, or **`bootstrap-automatic-proof-pending`** for bootstrap. Image transition/health proof is not full application or runtime acceptance. The original empty-host `verify` workflow refuses later generations; a separate nonempty-safe post-upgrade acceptance workflow is required. Repeated completed `apply`/`resume` stay offline and preserve this distinction.
+
+```sh
+npm run cloud -- upgrade abandon --operation RETURNED_OPERATION_ID --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+Abandonment is local and allowed only for untouched intents or a definite unsupported-maintenance response. It retains the journal/proofs and cannot reopen an active gate or forget an attempted update.
+
+To explicitly release eligible automatic source-side maintenance before any seal, stop or update attempt:
+
+```sh
+npm run cloud -- upgrade cancel --operation RETURNED_OPERATION_ID --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+Cancellation validates the exact started source machine/configuration/version under an exclusive Fly lease, authenticates the saved instance, and asks its maintenance API to reopen admission. Active work can continue; cancellation never stops a host or worker. A sealed gate, changed source, bootstrap mode or attempted update blocks cancellation and keeps the operation selected. A definite API refusal leaves the same operation available for upgrade resume. After an ambiguous or lost cancellation reply, retry **`upgrade cancel` with the same operation**, because ordinary upgrade resume cannot safely infer whether admission reopened. A lost reply reconciles the actual cancelled receipt; retained private proof permits recovery of interrupted local writes.
+
+The private per-operation `cancellation.json` is written before clearing the active pointer, and `current-images.json` retains its separately hash-bound `lastCancellation`. Status revalidates this historical proof without claiming current health. Cancellation preserves image generation, original provisioning and prior successful image lineage; a fresh explicit upgrade plan can follow. Retain cancellation evidence with the other private operation files. The CLI never automatically cancels or forces admission open.

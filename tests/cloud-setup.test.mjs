@@ -154,6 +154,17 @@ test('real adapters execute complete setup through fake HTTP, retain private run
   assert.ok(!JSON.stringify(osMachineConfig(validateCloudConfig(config()), plan.resources, 'vol_1')).includes(privateSecrets.ownerToken));
 });
 
+test('completed apply remains historical and offline after user apps are installed', async t => {
+  const path = await directory(t), args = { directory: path, config: config(), artifacts: artifacts() }, plan = await initializeCloudSetup(args), cloud = fakeCloud(plan);
+  await runCloudSetup({ ...args, credentials: credentials(), fetch: cloud.fetch });
+  cloud.apps.push({ id: 'f'.repeat(32), title: 'Owner app installed later' });
+  const before = await readFile(join(path, 'journal.json'), 'utf8'), calls = cloud.calls.length;
+  const status = await runCloudSetup({ ...args, fetch: () => assert.fail('completed provisioning must not replay the empty catalog guard') });
+  assert.equal(status.generation, 0); assert.deepEqual(status.currentImages, plan.images); assert.equal(status.activeUpgrade, null);
+  assert.equal(status.provisioning.liveAudit, 'not-performed'); assert.equal(status.acceptance.scope, 'historical-provisioning-and-acceptance');
+  assert.equal(cloud.calls.length, calls); assert.equal(cloud.apps.length, 1); assert.equal(await readFile(join(path, 'journal.json'), 'utf8'), before);
+});
+
 test('lost create response resumes by generated identity without duplicate volume or secret leakage', async t => {
   const path = await directory(t), args = { directory: path, config: config(), artifacts: artifacts() }, plan = await initializeCloudSetup(args), cloud = fakeCloud(plan);
   cloud.lost = `/v1/apps/${plan.resources.osApp}/volumes`;

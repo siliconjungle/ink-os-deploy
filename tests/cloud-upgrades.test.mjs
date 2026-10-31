@@ -14,6 +14,25 @@ const zero = () => Object.fromEntries(CLOUD_UPGRADE_ACTIVITY.map(key => [key, 0]
 const image = (name, digit) => `example.test/${name}@sha256:${digit.repeat(64)}`;
 const targets = { os: image('os', 'c'), runtime: image('runtime', 'd') };
 const flyToken = 'private-upgrade-management-token-'.repeat(3);
+
+test('a sealed source auto-start after a lost stop reply needs fresh quiescence', async t => {
+ const f=await fixture(t,{lose:'stop'});
+ await assert.rejects(runCloudUpgrade(f.runArgs));
+ assert.equal(f.model.stops,1);assert.equal(f.model.updates,0);
+ f.model.machine.state='started';f.model.bootId='7'.repeat(32);f.model.gate.state='draining';
+ const waiting=await runCloudUpgrade(f.runArgs);
+ assert.equal(f.model.stops,1);assert.equal(f.model.updates,0);
+ f.model.gate.state='quiescent';
+ await runCloudUpgrade(f.runArgs);
+ assert.equal(f.model.stops,2);assert.equal(f.model.updates,1);assert.equal(f.model.gate.state,'complete');
+});
+
+test('source auto-start recovery refuses a gate without durable stop authority', async t => {
+ const f=await fixture(t,{lose:'stop'});await assert.rejects(runCloudUpgrade(f.runArgs));
+ f.model.machine.state='started';f.model.bootId='7'.repeat(32);f.model.gate.state='quiescent';f.model.gate.stopAuthorized=false;
+ await assert.rejects(runCloudUpgrade(f.runArgs),{code:'upgrade-maintenance-stop-not-authorized'});
+ assert.equal(f.model.stops,1);assert.equal(f.model.updates,0);
+});
 async function fixture(t, { mode = 'automatic', images = targets, stopped = false, pinMissing = false, busy = false, unsupported = false, lose, providerDuration = false } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'ink-cloud-upgrade-'))); t.after(() => rm(directory, { force: true, recursive: true }));
   const config = { fly: { organization: 'proof-org', region: 'syd', osImage: image('os', 'a'), runtimeImage: image('runtime', 'b') }, cloudflare: { accountId: 'a'.repeat(32), zoneId: 'b'.repeat(32), zoneName: 'example.test', tls: 'existing' } };

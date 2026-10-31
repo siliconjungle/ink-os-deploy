@@ -1,8 +1,8 @@
 {
   "format": "ink-os-populated-host-upgrade-acceptance-v1",
   "status": "passed",
-  "generation": 4,
-  "selectedPlatformCommit": "ff67610a3d334fff1da23cb76a7b3f2f5dec6087",
+  "generation": 6,
+  "selectedPlatformCommit": "ae8953cd369f0357781c6060574cba4f272680cc",
   "checks": {
     "backendVerified": true,
     "edgeVerified": true,
@@ -18,11 +18,11 @@
   "bindings": [
     {
       "name": "private-selected-verifier-proof",
-      "sha256": "e9b9b13a2afb54144bdc29630b3fcc97cd65a73c4f30bf1b0ec842c97ab4ff7a"
+      "sha256": "eaa14cda0759dc7b2810548765399bebb7e1387331faa88df92cbf3a31dcb57b"
     },
     {
       "name": "private-lineage-verification-receipt",
-      "sha256": "ceb556418a97c6ba332447509f6ee29428f49ff86afc01c3d5f9b9c08db1c6d2"
+      "sha256": "c390579724144b44707c8e8d37ce0316d4c5c53736dd8ae822a1f9a66ac3e9e9"
     }
   ],
   "limits": [
@@ -30,5 +30,6 @@
     "Only the generated canary backend is exercised; installed app/custom runtime compatibility remains separate.",
     "Catalog identity equality does not attribute concurrent user data changes.",
     "A lost purge acknowledgement cannot prove source deletion and never yields passed acceptance."
-  ]
+  ],
+  "resumption": "An initial invocation returned a request error; a read-only observation succeeded, then the same durable nonce-bound verifier resumed and proved the state exactly once before cleanup."
 }

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { initializeCloudSetup } from '../lib/cloud-setup.mjs';
 import { readPrivateJSON, writePrivateJSON } from '../lib/cloud-private.mjs';
-import { CloudSetupError, osMachineConfig } from '../lib/cloud-providers.mjs';
+import { CloudSetupError, osMachineConfig, OS_SERVICE_HEALTH_CHECK } from '../lib/cloud-providers.mjs';
 import { planCloudUpgrade, describeCloudUpgrade, runCloudUpgrade, abandonCloudUpgrade, cancelCloudUpgrade, createCloudUpgradeMaintenance, CLOUD_UPGRADE_ACTIVITY } from '../lib/cloud-upgrades.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -302,6 +302,32 @@ test('documented empty init/restart/HTTPS defaults normalize without widening ex
   f.model.machine.config.init = { exec: null, entrypoint: [], cmd: null, tty: false }; f.model.machine.config.dns = {};
   f.model.machine.config.restart.max_retries = 0; f.model.machine.config.services[0].ports[1].force_https = false;
   assert.equal((await runCloudUpgrade(f.runArgs)).status, 'complete');
+});
+
+test('observed legacy generation-zero service schema upgrades the same bootstrap intent to persisted supported health checks',async t=>{
+  for(const oldHTTP of [false,true]){
+    const f=await fixture(t,{mode:'external-stopped-bootstrap',images:{os:targets.os,runtime:image('runtime','b')},stopped:true,pinMissing:true});
+    const service=f.model.machine.config.services[0];delete service.checks;service.force_instance_key=null;
+    if(oldHTTP)service.http_checks=[{path:'/api/health',interval:'30s',timeout:'5s',grace_period:'60s',method:'GET'}];
+    const original=structuredClone(f.model.machine.config),operation=f.planned.operationId;
+    const result=await runCloudUpgrade({...f.runArgs,bootstrapEvidence:await f.bootstrap()});assert.equal(result.operationId,operation);assert.equal(result.generation,1);assert.equal(f.model.stops,0);assert.equal(f.model.updates,1);
+    const expected=structuredClone(original);delete expected.services[0].http_checks;expected.services[0].checks=[{...OS_SERVICE_HEALTH_CHECK}];expected.image=targets.os;expected.env.INK_OS_IMAGE_PIN=targets.os;expected.metadata.ink_cloud_upgrade=operation;
+    assert.deepEqual(f.model.machine.config,expected);assert.equal(await readFile(f.journalPath,'utf8'),f.originalJournal);
+    const receipt=await readPrivateJSON(join(f.args.directory,'upgrades',operation,'receipt.json'));assert.equal(receipt.serviceHealth.sourceMonitoring,'legacy-health-unverified');assert.equal(receipt.serviceHealth.targetConfiguration,'supported-probe-configured-provider-observed');assert.equal(receipt.serviceHealth.passingStatusVerified,false);
+  }
+});
+
+test('legacy profile rejects altered ports, mounts, services, foreign/default force keys and unknown or changed health checks',async t=>{
+  for(const change of [m=>m.config.services[0].force_instance_key='foreign',m=>m.config.services[0].force_instance_key='',m=>m.config.services[0].ports[0].port=81,m=>m.config.services[0].ports[1].handlers=['http'],m=>m.config.services.push(structuredClone(m.config.services[0])),m=>m.config.mounts[0].path='/other',m=>m.config.services[0].checks=[],m=>m.config.services[0].checks=[{...OS_SERVICE_HEALTH_CHECK,path:'/other'}],m=>m.config.services[0].http_checks=[{path:'/foreign'}]]){
+    const f=await fixture(t,{mode:'external-stopped-bootstrap',images:{os:targets.os,runtime:image('runtime','b')},stopped:true,pinMissing:true});delete f.model.machine.config.services[0].checks;f.model.machine.config.services[0].force_instance_key=null;change(f.model.machine);
+    await assert.rejects(runCloudUpgrade({...f.runArgs,bootstrapEvidence:await f.bootstrap()}));assert.equal(f.model.mutations.length,0);assert.equal(f.model.updates,0);
+  }
+});
+
+test('missing or unsupported service health is never accepted for provenance-bearing source or generation-one machines',async t=>{
+  const source=await fixture(t);delete source.model.machine.config.services[0].checks;source.model.machine.config.services[0].force_instance_key=null;await assert.rejects(runCloudUpgrade(source.runArgs),{code:'upgrade-machine-service-config-conflict'});assert.equal(source.model.mutations.length,0);
+  const next=await fixture(t);await runCloudUpgrade(next.runArgs);const planned=await planCloudUpgrade({...next.args,images:{os:image('os','e'),runtime:image('runtime','f')}});delete next.model.machine.config.services[0].checks;const before=next.model.mutations.length;
+  await assert.rejects(runCloudUpgrade({...next.runArgs,operationId:planned.operationId}),{code:'upgrade-machine-service-config-conflict'});assert.equal(next.model.mutations.length,before);
 });
 
 test('version changes under lease and corrupt private target configs never overwrite newer source', async t => {

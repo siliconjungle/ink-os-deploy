@@ -5,7 +5,7 @@ import { tmpdir, hostname } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { initializeCloudSetup, describeCloudSetup, runCloudSetup, replaceCloudRuntimeCredential, reconcileCloudStep, recoverCloudLock, validateCloudConfig } from '../lib/cloud-setup.mjs';
-import { createCloudTransport, osMachineConfig } from '../lib/cloud-providers.mjs';
+import { createCloudTransport, osMachineConfig, OS_SERVICE_HEALTH_CHECK } from '../lib/cloud-providers.mjs';
 
 const config = () => ({ fly: { organization: 'proof-org', region: 'syd', osImage: `example.test/ink/os@sha256:${'a'.repeat(64)}`, runtimeImage: `example.test/ink/runtime@sha256:${'b'.repeat(64)}` }, cloudflare: { accountId: 'a'.repeat(32), zoneId: 'b'.repeat(32), zoneName: 'example.test', tls: 'order-advanced' } });
 const artifacts = () => ({ storage: { 'worker.mjs': 'export default {fetch(){return new Response("storage")}}' }, edge: { 'worker.mjs': 'import x from "./game-assets.mjs"; export default x;', 'game-assets.mjs': 'export default {fetch(){return new Response("edge")}}' } });
@@ -348,5 +348,15 @@ test('Fly normalized mount facts are accepted while changed volume, path, encryp
     // Keep provisioning active; normalized mounts were checked before the health gate failed.
     cloud.healthId='not-ready';await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/instance-mismatch/);cloud.healthId=plan.instanceId;mutate(cloud.machines[0]);
     const before=cloud.mutations.length;await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/resource-ownership-or-configuration-conflict/);assert.equal(cloud.mutations.length,before);
+  }
+});
+
+test('new Machine JSON health probes use supported service checks and provider must retain their exact configuration',async t=>{
+  for(const mutate of [null,m=>delete m.config.services[0].checks,m=>m.config.services[0].checks[0].path='/other',m=>m.config.services[0].checks[0].port=80,m=>m.config.services[0].checks[0].type='tcp',m=>m.config.services[0].force_instance_key='foreign',m=>m.config.services[0].force_instance_key='',m=>m.config.services[0].http_checks=[]]){
+    const args={directory:await directory(t),config:config(),artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan);cloud.healthId='not-ready';await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/instance-mismatch/);
+    const machine=cloud.machines[0];assert.deepEqual(machine.config.services[0].checks,[{...OS_SERVICE_HEALTH_CHECK}]);assert.equal(Object.hasOwn(machine.config.services[0],'http_checks'),false);
+    machine.config.services[0].autostop=false;machine.config.services[0].force_instance_key=null;cloud.healthId=plan.instanceId;if(mutate)mutate(machine);const before=cloud.mutations.length;
+    if(mutate){await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/resource-ownership-or-configuration-conflict/);assert.equal(cloud.mutations.length,before);}
+    else assert.equal((await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch})).status,'acceptance-pending');
   }
 });

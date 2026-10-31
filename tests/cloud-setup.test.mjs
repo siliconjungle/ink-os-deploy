@@ -79,6 +79,7 @@ function fakeCloud(plan, cfg = config()) {
         if (method === 'GET') return json(state.machines);
         assert.equal(body.config.env.INK_OS_INSTANCE_ID, n.id); assert.equal(body.config.env.INK_OS_R2_BUCKET, n.bucket);
         assert.equal(body.config.env.INK_OS_APP_PREFIX, n.runtimePrefix);
+        body.config.mounts=body.config.mounts.map(mount=>({encrypted:true,path:mount.path,size_gb:cfg.fly.volumeGB,volume:mount.volume,name:n.volume}));
         state.machines.push({ ...body, id: 'machine_1', state: 'started' }); response = json(state.machines.at(-1));
       }
     } else if (u.host === 'api.fly.io') {
@@ -319,4 +320,13 @@ test('shared-zone routing requires existing proxied wildcard and never creates o
   cloud.packs.push({id:'zone_certificate',hosts:['*.'+cfg.cloudflare.zoneName],status:'active'});
   await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/shared-zone-proxied-wildcard-required/);
   assert.equal(cloud.dns.length,0);assert.ok(!cloud.mutations.some(m=>m.path.endsWith('/dns_records')||m.path.endsWith('/ssl/certificate_packs/order')));
+});
+
+
+test('Fly normalized mount facts are accepted while changed volume, path, encryption or extra mounts remain conflicts', async t => {
+  for(const mutate of [m=>m.config.mounts[0].volume='foreign_volume',m=>m.config.mounts[0].path='/other',m=>m.config.mounts[0].encrypted=false,m=>m.config.mounts[0].size_gb++,m=>m.config.mounts[0].name='foreign_name',m=>m.config.mounts.push({...m.config.mounts[0],path:'/extra'}),m=>m.config.mounts[0].read_only=true]){
+    const args={directory:await directory(t),config:config(),artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan);
+    await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});mutate(cloud.machines[0]);
+    const before=cloud.mutations.length;await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/resource-ownership-or-configuration-conflict/);assert.equal(cloud.mutations.length,before);
+  }
 });

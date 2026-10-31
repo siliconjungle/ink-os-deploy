@@ -27,7 +27,8 @@
     ".local/cloud/new-instance/current-images.json": "Operator-owned current image generation and separately proof-bound lastCancellation lineage; never disposable output.",
     ".local/cloud/new-instance/upgrades": "Operator-owned immutable upgrade intents, private progress/leases and retained transition/bootstrap/cancellation evidence and receipts.",
     ".local/cloud/new-instance/upgrade-verification.json": "Operator-owned current-generation verifier attempt and hash-bound historical acceptance pointer.",
-    ".local/cloud/new-instance/upgrade-verification": "Operator-owned nonce canary journals, selected-source bindings, proofs and current-generation verification receipts; protected recovery inputs."
+    ".local/cloud/new-instance/upgrade-verification": "Operator-owned nonce canary journals, selected-source bindings, proofs and current-generation verification receipts; protected recovery inputs.",
+    "evidence/populated-host-upgrade.json": "Selected actual fourth-generation hosted runtime/edge/source-privacy/cleanup proof preserving an existing38-app personal catalog, without deployment identities."
   },
   "safe_to_remove": {}
 }

@@ -1,0 +1,34 @@
+{
+  "format": "ink-os-populated-host-upgrade-acceptance-v1",
+  "status": "passed",
+  "generation": 4,
+  "selectedPlatformCommit": "ff67610a3d334fff1da23cb76a7b3f2f5dec6087",
+  "checks": {
+    "backendVerified": true,
+    "edgeVerified": true,
+    "sourcePrivacyVerified": true,
+    "sourceDeletionAcknowledged": true,
+    "canaryAppsRemaining": 0,
+    "canaryWorkersRemaining": 0,
+    "sourceAssetsRemaining": 0,
+    "catalogIdsUnchanged": true,
+    "initialCatalogCount": 38,
+    "foreignMutationRequests": 0
+  },
+  "bindings": [
+    {
+      "name": "private-selected-verifier-proof",
+      "sha256": "e9b9b13a2afb54144bdc29630b3fcc97cd65a73c4f30bf1b0ec842c97ab4ff7a"
+    },
+    {
+      "name": "private-lineage-verification-receipt",
+      "sha256": "ceb556418a97c6ba332447509f6ee29428f49ff86afc01c3d5f9b9c08db1c6d2"
+    }
+  ],
+  "limits": [
+    "HTTP authentication and cookie checks do not prove graphical browser behavior.",
+    "Only the generated canary backend is exercised; installed app/custom runtime compatibility remains separate.",
+    "Catalog identity equality does not attribute concurrent user data changes.",
+    "A lost purge acknowledgement cannot prove source deletion and never yields passed acceptance."
+  ]
+}

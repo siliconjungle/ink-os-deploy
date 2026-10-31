@@ -1,4 +1,22 @@
 {
-  "keep": { "compose.yaml": "Container deployment definition.", "scripts": "Deployment tooling and checks." },
+  "keep": {
+    "compose.yaml": "Container deployment definition and reproduction input.",
+    "scripts/check.mjs": "Real Compose configuration validation entry point.",
+    "package.json": "Dependency-free package metadata, executable discovery and verification commands.",
+    "storage-retention.json": "Exact retention/protected-input declarations for this repository.",
+    "README.md": "Container/cloud setup contract, explicit TLS choice and remaining acceptance gates.",
+    "LICENSE": "Required license notice.",
+    ".gitignore": "Protects generated/private deployment state from publication.",
+    "cli/cloud.mjs": "Explicit cloud planning/provisioning/resume/status and private credential correction CLI.",
+    "lib/cloud-config.mjs": "Validated fresh resource identities and immutable public plans.",
+    "lib/cloud-contract.mjs": "Selected official API sources and exact account/image/domain acceptance prerequisites.",
+    "lib/cloud-private.mjs": "Private durable state and safe process-lock recovery.",
+    "lib/cloud-providers.mjs": "Fly/Cloudflare adapters, credential authentication and ownership checks.",
+    "lib/cloud-setup.mjs": "Resumable orchestration, explicit correction and recovery APIs.",
+    "lib/cloud-acceptance.mjs": "Resumable exact-byte OS/R2 storage proof and scoped cleanup.",
+    "tests/cloud-cli.test.mjs": "Offline executable, documentation/configuration and private-input proofs.",
+    "tests/cloud-setup.test.mjs": "Provider/recovery/credential/TLS/state/acceptance regression proofs.",
+    ".local/cloud/new-instance": "Operator-created private journal/credentials at the documented destination; protected recovery inputs, never a disposable build output."
+  },
   "safe_to_remove": {}
 }

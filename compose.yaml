@@ -1,4 +1,11 @@
 services:
+  runtime-image:
+    image: ${INK_OS_DOCKER_RUNTIME_IMAGE:-ink-os-runtime:local}
+    build:
+      context: ${INK_OS_PLATFORM_DIR:-../ink-os-platform}
+      target: runtime
+    command: ["node", "--version"]
+    restart: "no"
   ink-os:
     build:
       context: ${INK_OS_PLATFORM_DIR:-../ink-os-platform}
@@ -9,8 +16,23 @@ services:
       INK_OS_APP_ORIGIN_TEMPLATE: ${INK_OS_APP_ORIGIN_TEMPLATE:-http://__RELEASE__.apps.ink.localhost:8080}
       INK_OS_DATA_DIR: /data
       INK_OS_BIND: 0.0.0.0
+      INK_OS_CONFIG: /data/client.json
+      INK_OS_URL: http://127.0.0.1:4318
+      INK_OS_BACKENDS: docker
+      INK_OS_DOCKER_SOCKET: /var/run/docker.sock
+      INK_OS_DOCKER_RUNTIME_IMAGE: ${INK_OS_DOCKER_RUNTIME_IMAGE:-ink-os-runtime:local}
+      INK_OS_DOCKER_NETWORK: ${INK_OS_DOCKER_NETWORK:-ink-os-local}
+      INK_OS_DOCKER_CONNECTION: network
+      INK_OS_DOCKER_OS_URL: http://ink-os:4318
+      INK_OS_DOCKER_IDLE_MS: ${INK_OS_DOCKER_IDLE_MS:-120000}
     volumes:
       - ink-data:/data
+      - ${INK_OS_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    networks:
+      - ink-runtime
+    depends_on:
+      runtime-image:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4318/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -19,3 +41,6 @@ services:
       retries: 5
 volumes:
   ink-data:
+networks:
+  ink-runtime:
+    name: ${INK_OS_DOCKER_NETWORK:-ink-os-local}

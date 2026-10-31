@@ -1,0 +1,39 @@
+{
+  "format": "ink-cloud-verifier-sdk-closure-v1",
+  "inputs": [
+    {
+      "path": "lib/verifier-sources.mjs",
+      "sha256": "353103bfbfab98db8e310401c1eba38c0018811d149cfc04275cb639e240795a"
+    },
+    {
+      "path": "lib/cloud-verification.mjs",
+      "sha256": "2062e3fa248c84a090caca618075f42c3273f8c5f628a4719e2a8cd8a7a63d66"
+    },
+    {
+      "path": "lib/cloud-upgrade-verification.mjs",
+      "sha256": "a8c3d97562b1e1b41a507116ac585db6774bea3f033732b63fcd789639e9e1b3"
+    },
+    {
+      "path": "tests/verifier-sources.test.mjs",
+      "sha256": "78e2fc07b39cb646146098913e4494e8a67a6a0b0122d5f27ad020a10059ed33"
+    }
+  ],
+  "regression": {
+    "tests": 90,
+    "passed": 90,
+    "failed": 0,
+    "logSha256": "fb2bc55a65fc1fdb08aa2b2f57420fe95d26fe195b69bffbc0f59528463be12b"
+  },
+  "addedClosureGuard": {
+    "tests": 1,
+    "passed": 1,
+    "logSha256": "eddd0021e285ee945e90a66962d36933ed267b79924ef5764fba1e820052af12"
+  },
+  "platformSource": "d87bdeba0feb74c031a27567aec92b9c14c523cc",
+  "coverage": [
+    "Complete bounded relative SDK graph includes the origin-bound continuation helper and backup client.",
+    "Shared-source changes affect verifier identity.",
+    "Only the backup client exact Node crypto import can be lazy; other dynamic or out-of-graph imports are refused.",
+    "Existing source bindings, private-state integrity, interrupted-operation recovery, cloud canary cleanup and upgrade guards passed the full selected-platform integration suite."
+  ]
+}

@@ -28,7 +28,12 @@
     ".local/cloud/new-instance/upgrades": "Operator-owned immutable upgrade intents, private progress/leases and retained transition/bootstrap/cancellation evidence and receipts.",
     ".local/cloud/new-instance/upgrade-verification.json": "Operator-owned current-generation verifier attempt and hash-bound historical acceptance pointer.",
     ".local/cloud/new-instance/upgrade-verification": "Operator-owned nonce canary journals, selected-source bindings, proofs and current-generation verification receipts; protected recovery inputs.",
-    "evidence/populated-host-upgrade.json": "Selected actual fourth-generation hosted runtime/edge/source-privacy/cleanup proof preserving an existing38-app personal catalog, without deployment identities."
+    "evidence/populated-host-upgrade.json": "Selected actual fourth-generation hosted runtime/edge/source-privacy/cleanup proof preserving an existing38-app personal catalog, without deployment identities.",
+    "lib/verifier-sources.mjs": "Required current selected-SDK closure implementation and exact validation proof.",
+    "tests/verifier-sources.test.mjs": "Required current selected-SDK closure implementation and exact validation proof.",
+    "evidence/verifier-sdk-closure.json": "Required current selected-SDK closure implementation and exact validation proof.",
+    ".local/finish-verifier-tests.log": "Required current selected-SDK closure implementation and exact validation proof.",
+    ".local/finish-verifier-closure-test.log": "Required current selected-SDK closure implementation and exact validation proof."
   },
   "safe_to_remove": {}
 }

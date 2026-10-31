@@ -15,7 +15,7 @@
     },
     {
       "path": "tests/verifier-sources.test.mjs",
-      "sha256": "78e2fc07b39cb646146098913e4494e8a67a6a0b0122d5f27ad020a10059ed33"
+      "sha256": "9c5459037e74bc7592d5ab2b61d3012ba17326cc8bc7bdccbc98673ab4f057a1"
     }
   ],
   "regression": {
@@ -27,7 +27,8 @@
   "addedClosureGuard": {
     "tests": 1,
     "passed": 1,
-    "logSha256": "eddd0021e285ee945e90a66962d36933ed267b79924ef5764fba1e820052af12"
+    "logSha256": "3e0c957f7bd9ac1411b9905d4d13790f07d57d56ceb9b767f7eba54a323453e4",
+    "correction": "The initial additional fixture failed because macOS /tmp resolves through a symlink. The fixture now uses its canonical path; the actual selected-platform 90-test integration run had already passed."
   },
   "platformSource": "d87bdeba0feb74c031a27567aec92b9c14c523cc",
   "coverage": [

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, readFile, writeFile, rm, realpath, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, realpath, stat, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -191,4 +191,24 @@ integration('lost create resumes the same verifier-owned canary and no storage a
   await assert.rejects(verifyCloudSetup({ ...g.args, phase: 'run', fetch: g.fetch }), { code: 'hosted-proof-storage-acknowledgement-pending' });
   assert.equal((await readPrivateJSON(g.journalPath)).verification, undefined); assert.equal((await describeCloudSetup(g.args)).acceptance.pooledBackendCanary, 'pending'); assert.equal(g.apps.size, 0);
   assert.equal((await verifyCloudSetup({ ...g.args, phase: 'run', fetch: g.fetch })).acceptance.pooledBackendCanary, 'passed');
+});
+
+integration('new selected verifier sources require a new completed attempt and cannot replace an active binding', async t => {
+  const f = await fixture(t), selected = join(f.directory, 'selected-platform');
+  const files = ['scripts/verify-cloud-host.mjs', 'sdk/src/server.js', 'sdk/src/projects.js', 'sdk/src/workflows.js', 'sdk/src/commands.js', 'sdk/src/live-query.js', 'sdk/src/app-api.js'];
+  for (const path of files) {
+    const target = join(selected, path); await mkdir(join(target, '..'), { recursive: true });
+    const source = await readFile(join(platformRoot, path), 'utf8');
+    await writeFile(target, source + (path === 'sdk/src/server.js' ? '\n// Selected revision marker.\n' : ''));
+  }
+  await verifyCloudSetup({ ...f.args, phase: 'prepare-restart', fetch: f.fetch });
+  const before = f.mutations.length;
+  await assert.rejects(verifyCloudSetup({ ...f.args, platformRoot: selected, phase: 'cleanup', fetch: f.fetch }), { code: 'hosted-verification-inputs-changed' });
+  assert.equal(f.mutations.length, before);
+  await verifyCloudSetup({ ...f.args, phase: 'cleanup', fetch: f.fetch });
+  const previous = (await readPrivateJSON(f.journalPath)).verificationAttempt.id;
+  const result = await verifyCloudSetup({ ...f.args, platformRoot: selected, phase: 'prepare-restart', fetch: f.fetch });
+  assert.equal(result.status, 'awaiting-restart');
+  assert.notEqual((await readPrivateJSON(f.journalPath)).verificationAttempt.id, previous);
+  await verifyCloudSetup({ ...f.args, platformRoot: selected, phase: 'cleanup', fetch: f.fetch });
 });

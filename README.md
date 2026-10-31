@@ -25,7 +25,7 @@ Cloud provisioning, external domains/TLS and desktop Docker-engine acceptance re
 
 ## Cloud setup
 
-Node 22+ exposes `npm run cloud -- <command>` and the package executable `ink-os-cloud`. No npm dependencies are required. `npm test` or `npm run check:cloud` runs offline tests; the verifier integration fixtures require an explicit trusted platform checkout: `INK_OS_TEST_PLATFORM_ROOT=/path/to/ink-os-platform npm test`. Without that selection, only those six integration fixtures are skipped; the standalone deployment tests still run. An invalid explicit path fails rather than skipping. `npm run check` retains the Compose validator.
+Node 22+ exposes `npm run cloud -- <command>` and the package executable `ink-os-cloud`. No npm dependencies are required. `npm test` or `npm run check:cloud` runs offline tests; the verifier integration fixtures require an explicit trusted platform checkout: `INK_OS_TEST_PLATFORM_ROOT=/path/to/ink-os-platform npm test`. Without that selection, only those integration fixtures are skipped; the standalone deployment tests still run. An invalid explicit path fails rather than skipping. `npm run check` retains the Compose validator.
 
 Create `cloud.json` with your Fly organization/region, published OS and pooled runtime image digests, and an active full Cloudflare zone with R2 enabled. Replace every example account, zone, domain and image value with your selected resources. Planning validates configuration syntax offline; building/publishing images and checking registry access remain deployment prerequisites.
 

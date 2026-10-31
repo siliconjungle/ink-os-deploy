@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { initializeCloudSetup } from '../lib/cloud-setup.mjs';
 import { readPrivateJSON, writePrivateJSON } from '../lib/cloud-private.mjs';
-import { CloudSetupError, osMachineConfig, OS_SERVICE_HEALTH_CHECK } from '../lib/cloud-providers.mjs';
+import { CloudSetupError, osMachineConfig, OS_SERVICE_HEALTH_CHECK, normalizeMachineServices } from '../lib/cloud-providers.mjs';
 import { planCloudUpgrade, describeCloudUpgrade, runCloudUpgrade, abandonCloudUpgrade, cancelCloudUpgrade, createCloudUpgradeMaintenance, CLOUD_UPGRADE_ACTIVITY } from '../lib/cloud-upgrades.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -14,7 +14,7 @@ const zero = () => Object.fromEntries(CLOUD_UPGRADE_ACTIVITY.map(key => [key, 0]
 const image = (name, digit) => `example.test/${name}@sha256:${digit.repeat(64)}`;
 const targets = { os: image('os', 'c'), runtime: image('runtime', 'd') };
 const flyToken = 'private-upgrade-management-token-'.repeat(3);
-async function fixture(t, { mode = 'automatic', images = targets, stopped = false, pinMissing = false, busy = false, unsupported = false, lose } = {}) {
+async function fixture(t, { mode = 'automatic', images = targets, stopped = false, pinMissing = false, busy = false, unsupported = false, lose, providerDuration = false } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'ink-cloud-upgrade-'))); t.after(() => rm(directory, { force: true, recursive: true }));
   const config = { fly: { organization: 'proof-org', region: 'syd', osImage: image('os', 'a'), runtimeImage: image('runtime', 'b') }, cloudflare: { accountId: 'a'.repeat(32), zoneId: 'b'.repeat(32), zoneName: 'example.test', tls: 'existing' } };
   const artifacts = { storage: { 'worker.mjs': 'export default {};' }, edge: { 'worker.mjs': 'import x from "./game-assets.mjs";export default x;', 'game-assets.mjs': 'export default {};' } };
@@ -93,6 +93,7 @@ async function fixture(t, { mode = 'automatic', images = targets, stopped = fals
     if (path === base && method === 'POST') {
       assert.equal(options.headers['fly-machine-lease-nonce'], model.lease.nonce); assert.equal(model.machine.state, 'stopped'); assert.equal(body.current_version, model.machine.instance_id); assert.equal(body.skip_launch, true);
       model.machine.config = structuredClone(body.config); model.machine.instance_id = 'updated_version_' + ++model.updates; model.machine.image_ref = { digest: body.config.image.split('@')[1] };
+      if(providerDuration)model.machine.config.services[0].checks[0].grace_period='1m0s';
       if (lose === 'update' && !model.lost) { model.lost = true; throw Error(flyToken); } return Response.json(model.machine);
     }
     if (path === base + '/start') {
@@ -328,6 +329,19 @@ test('missing or unsupported service health is never accepted for provenance-bea
   const source=await fixture(t);delete source.model.machine.config.services[0].checks;source.model.machine.config.services[0].force_instance_key=null;await assert.rejects(runCloudUpgrade(source.runArgs),{code:'upgrade-machine-service-config-conflict'});assert.equal(source.model.mutations.length,0);
   const next=await fixture(t);await runCloudUpgrade(next.runArgs);const planned=await planCloudUpgrade({...next.args,images:{os:image('os','e'),runtime:image('runtime','f')}});delete next.model.machine.config.services[0].checks;const before=next.model.mutations.length;
   await assert.rejects(runCloudUpgrade({...next.runArgs,operationId:planned.operationId}),{code:'upgrade-machine-service-config-conflict'});assert.equal(next.model.mutations.length,before);
+});
+
+test('Fly duration serialization canonicalizes only observed 1m0s grace to existing 60s bytes',()=>{
+  const services=[{protocol:'tcp',internal_port:4318,autostop:false,checks:[{...OS_SERVICE_HEALTH_CHECK}]}],before=sha(JSON.stringify(services)),wire=structuredClone(services);wire[0].checks[0].grace_period='1m0s';
+  assert.deepEqual(normalizeMachineServices(wire),services);assert.equal(sha(JSON.stringify(normalizeMachineServices(services))),before);assert.equal(sha(JSON.stringify(normalizeMachineServices(wire))),before);
+  for(const [field,value]of[['grace_period','1m1s'],['grace_period','60ms'],['grace_period',60],['interval','1m0s'],['timeout','1m0s']]){const changed=structuredClone(services);changed[0].checks[0][field]=value;assert.notDeepEqual(normalizeMachineServices(changed),services);}
+});
+
+test('lost bootstrap update reply resumes observed normalized target without rewriting saved target config or updating twice',async t=>{
+  const f=await fixture(t,{mode:'external-stopped-bootstrap',images:{os:targets.os,runtime:image('runtime','b')},stopped:true,pinMissing:true,lose:'update',providerDuration:true});delete f.model.machine.config.services[0].checks;f.model.machine.config.services[0].force_instance_key=null;
+  await assert.rejects(runCloudUpgrade({...f.runArgs,bootstrapEvidence:await f.bootstrap()}));assert.equal(f.model.updates,1);assert.equal(f.model.machine.state,'stopped');assert.equal(f.model.machine.config.services[0].checks[0].grace_period,'1m0s');
+  const path=join(f.args.directory,'upgrades',f.planned.operationId,'progress.json'),before=await readPrivateJSON(path);assert.equal(before.targetConfig.services[0].checks[0].grace_period,'60s');
+  const result=await runCloudUpgrade(f.runArgs),after=await readPrivateJSON(path);assert.equal(result.status,'complete');assert.equal(f.model.updates,1);assert.equal(f.model.stops,0);assert.equal(f.model.starts,1);assert.equal(after.targetConfigHash,before.targetConfigHash);assert.equal(after.baselineConfigHash,before.baselineConfigHash);assert.deepEqual(after.targetConfig,before.targetConfig);
 });
 
 test('version changes under lease and corrupt private target configs never overwrite newer source', async t => {

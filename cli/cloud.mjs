@@ -5,10 +5,11 @@ import { pathToFileURL } from 'node:url';
 import { initializeCloudSetup, describeCloudSetup, runCloudSetup, replaceCloudRuntimeCredential, CloudSetupError, validateCloudConfig } from '../lib/cloud-setup.mjs';
 import { CLOUD_ACCEPTANCE_PREREQUISITES, CLOUD_API_SOURCES } from '../lib/cloud-contract.mjs';
 import { verifyCloudSetup } from '../lib/cloud-verification.mjs';
+import { verifyCloudUpgrade } from '../lib/cloud-upgrade-verification.mjs';
 import { planCloudUpgrade, describeCloudUpgrade, runCloudUpgrade, abandonCloudUpgrade, cancelCloudUpgrade } from '../lib/cloud-upgrades.mjs';
 
 export const CLOUD_CREDENTIAL_ENV = Object.freeze({ flyToken: 'INK_CLOUD_FLY_TOKEN', cloudflareToken: 'INK_CLOUD_CLOUDFLARE_TOKEN', runtimeFlyToken: 'INK_CLOUD_RUNTIME_FLY_TOKEN' });
-const usage = 'node cli/cloud.mjs <plan|apply|resume|status|replace-runtime-credential|verify|upgrade ACTION> --config FILE --state PRIVATE_DIRECTORY --platform-root TRUSTED_SELECTED_PLATFORM_DIRECTORY [verify: --phase run|prepare-restart|resume|cleanup [--restart-receipt PRIVATE_FILE]] [upgrade plan: --os-image DIGEST --runtime-image DIGEST [--mode automatic|external-stopped-bootstrap]] [upgrade run|resume|cancel|abandon: --operation ID] [upgrade run|resume: --bootstrap-receipt FILE --bootstrap-evidence FILE] [upgrade status: --operation ID]';
+const usage = 'node cli/cloud.mjs <plan|apply|resume|status|replace-runtime-credential|verify|upgrade ACTION> --config FILE --state PRIVATE_DIRECTORY --platform-root TRUSTED_SELECTED_PLATFORM_DIRECTORY [verify: --phase run|prepare-restart|resume|cleanup [--restart-receipt PRIVATE_FILE]] [upgrade plan: --os-image DIGEST --runtime-image DIGEST [--mode automatic|external-stopped-bootstrap]] [upgrade run|resume|cancel|abandon: --operation ID] [upgrade run|resume: --bootstrap-receipt FILE --bootstrap-evidence FILE] [upgrade verify: --phase run|cleanup] [upgrade status: --operation ID]';
 const hints = {
   'cloud-state-not-initialized': 'Run plan with these exact explicit paths before apply/resume.',
   'invalid-cloud-config-file': 'Use JSON containing only fly and cloudflare configuration; images need sha256 digest pins and cloudflare.tls must explicitly select existing or order-advanced before planning. Credentials and previous resource IDs are not configuration fields.',
@@ -27,7 +28,7 @@ const hints = {
   'hosted-verification-restart-receipt-required': 'The saved canary is awaiting an externally performed restart. Use verify --phase resume with the challenge-bound private receipt, or explicit cleanup.',
   'hosted-proof-storage-acknowledgement-pending': 'The canary is absent but a storage deletion acknowledgement was not observed. Readiness is not promoted; a fresh explicit verification attempt can obtain complete evidence.',
   'provision-cloud-before-hosted-verification': 'Complete provisioning and its initial empty-catalog/storage proof before starting hosted verification.',
-  'hosted-verification-original-generation-only': 'Fresh-host verification is bound to original generation 0 and cannot run during an upgrade or accept later image generations. Current-generation runtime acceptance requires a separate workflow.',
+  'hosted-verification-original-generation-only': 'Fresh-host verification is bound to original generation 0 and cannot run during an upgrade or accept later image generations. Use upgrade verify --phase run after an image upgrade completes.',
   'upgrade-explicit-fly-credential-required': 'Supply INK_CLOUD_FLY_TOKEN privately for an active upgrade. Status, planning, abandonment and completed-receipt recovery are offline. Owner credentials come from the saved private instance state.',
   'upgrade-maintenance-api-required': 'This host lacks the required maintenance API. No automatic stop is attempted. An untouched/unsupported intent may be abandoned before an explicitly limited OS-only external-stopped bootstrap is planned.',
   'upgrade-source-image-provenance-required': 'Automatic maintenance requires provider-observed INK_OS_IMAGE_PIN provenance. An older host needs the explicit OS-only external-stopped bootstrap with retained quiescence evidence.',
@@ -39,6 +40,9 @@ const hints = {
   'upgrade-active-operation-must-resume': 'Resume the saved operation with its unchanged image pair/mode, or explicitly abandon an untouched intent before planning a different one.',
   'upgrade-bootstrap-private-evidence-required': 'External-stopped bootstrap requires both private receipt and observation files. It never stops the legacy host or workers itself.',
   'upgrade-image-lineage-missing-recovery-required': 'Retain and restore the bound current-images.json and upgrades directory together. Missing image lineage is never reset to original images.',
+  'upgraded-verification-current-generation-required': 'Complete an image upgrade first. Original generation 0 uses its separate fresh-host verifier; no fallback is performed.',
+  'upgraded-verification-inputs-changed-cleanup-required': 'Resume or explicitly clean the saved verifier attempt with its exact selected verifier/SDK sources. Changed generation or image inputs cannot replace an active canary journal.',
+  'upgraded-verification-journal-recovery-required': 'Restore the private verifier journal for this attempt. It is never recreated after a canary mutation attempt.',
 };
 const cliError = code => Object.assign(Error(code), { cliCode: code });
 const emit = (stream, value) => stream.write(JSON.stringify(value) + '\n');
@@ -48,8 +52,8 @@ function parse(argv) {
   const [command, ...remaining] = argv;
   if (!['plan', 'apply', 'resume', 'status', 'replace-runtime-credential', 'verify', 'upgrade'].includes(command)) throw cliError('explicit-cloud-command-required');
   const action = command === 'upgrade' ? remaining[0] : undefined, args = command === 'upgrade' ? remaining.slice(1) : remaining;
-  if (command === 'upgrade' && !['plan', 'run', 'resume', 'status', 'cancel', 'abandon'].includes(action)) throw cliError('explicit-upgrade-action-required');
-  const extra = command === 'verify' ? ['--phase', '--restart-receipt'] : command !== 'upgrade' ? [] : action === 'plan' ? ['--os-image', '--runtime-image', '--mode'] : ['run', 'resume'].includes(action) ? ['--operation', '--bootstrap-receipt', '--bootstrap-evidence'] : ['--operation'];
+  if (command === 'upgrade' && !['plan', 'run', 'resume', 'status', 'verify', 'cancel', 'abandon'].includes(action)) throw cliError('explicit-upgrade-action-required');
+  const extra = command === 'verify' ? ['--phase', '--restart-receipt'] : command !== 'upgrade' ? [] : action === 'plan' ? ['--os-image', '--runtime-image', '--mode'] : action==='verify'?['--phase']:['run', 'resume'].includes(action) ? ['--operation', '--bootstrap-receipt', '--bootstrap-evidence'] : ['--operation'];
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
     if (!['--config', '--state', '--platform-root', ...extra].includes(args[i]) || !args[i + 1] || args[i + 1].startsWith('--') || Object.hasOwn(options, args[i])) throw cliError('invalid-cloud-arguments');
@@ -58,6 +62,7 @@ function parse(argv) {
   if (!['--config', '--state', '--platform-root'].every(key => options[key])) throw cliError('explicit-cloud-paths-required');
   if (command === 'verify' && !['run', 'prepare-restart', 'resume', 'cleanup'].includes(options['--phase'])) throw cliError('explicit-hosted-verification-phase-required');
   if (command === 'upgrade') {
+    if(action==='verify'&&!['run','cleanup'].includes(options['--phase']))throw cliError('explicit-upgraded-verification-phase-required');
     if (action === 'plan' && (!options['--os-image'] || !options['--runtime-image'])) throw cliError('explicit-pinned-upgrade-image-pair-required');
     if (options['--mode'] !== undefined && !['automatic', 'external-stopped-bootstrap'].includes(options['--mode'])) throw cliError('invalid-upgrade-mode');
     if (['run', 'resume', 'cancel', 'abandon'].includes(action) && !options['--operation']) throw cliError('explicit-upgrade-operation-required');
@@ -100,7 +105,7 @@ export async function runCloudCLI({ argv = [], env = {}, stdout = process.stdout
   let command, action;
   try {
     const parsed = parse(argv); command = parsed.command; action = parsed.action;
-    if (parsed.help) { emit(stdout, { usage, credentials: CLOUD_CREDENTIAL_ENV, mutationCommands: ['apply', 'resume', 'verify', 'upgrade run', 'upgrade resume', 'upgrade cancel'], upgradeActions: ['plan', 'run', 'resume', 'status', 'cancel', 'abandon'], credentialCorrectionCommand: 'replace-runtime-credential', prerequisites: CLOUD_ACCEPTANCE_PREREQUISITES }); return 0; }
+    if (parsed.help) { emit(stdout, { usage, credentials: CLOUD_CREDENTIAL_ENV, mutationCommands: ['apply', 'resume', 'verify', 'upgrade run', 'upgrade resume', 'upgrade verify', 'upgrade cancel'], upgradeActions: ['plan', 'run', 'resume', 'status', 'verify', 'cancel', 'abandon'], credentialCorrectionCommand: 'replace-runtime-credential', prerequisites: CLOUD_ACCEPTANCE_PREREQUISITES }); return 0; }
     const args = await inputs(parsed.options, cwd);
     let deployment, verification, upgrade;
     if (command === 'plan') deployment = await initializeCloudSetup(args);
@@ -114,6 +119,10 @@ export async function runCloudCLI({ argv = [], env = {}, stdout = process.stdout
       if (action === 'plan') upgrade = await planCloudUpgrade({ ...args, images: { os: parsed.options['--os-image'], runtime: parsed.options['--runtime-image'] }, mode: parsed.options['--mode'] || 'automatic' });
       else if (action === 'status') upgrade = await describeCloudUpgrade({ ...args, operationId: parsed.options['--operation'] });
       else if (action === 'abandon') upgrade = await abandonCloudUpgrade({ ...args, operationId: parsed.options['--operation'] });
+      else if(action==='verify'){
+        if(env[CLOUD_CREDENTIAL_ENV.runtimeFlyToken]!==undefined)await runCloudSetup({...args,credentials:{runtimeFlyToken:env[CLOUD_CREDENTIAL_ENV.runtimeFlyToken]}});
+        verification=await verifyCloudUpgrade({...args,phase:parsed.options['--phase'],fetch});
+      }
       else {
         const existing = await describeCloudSetup(args);
         if (parsed.options['--bootstrap-receipt'] && (await describeCloudUpgrade({ ...args, operationId: parsed.options['--operation'] })).mode !== 'external-stopped-bootstrap') throw cliError('bootstrap-evidence-not-valid-for-automatic-upgrade');
@@ -144,7 +153,7 @@ export async function runCloudCLI({ argv = [], env = {}, stdout = process.stdout
     emit(stderr, { ok: false, command: command ?? null, ...(action ? { action } : {}), error: { code,
       ...(hints[code] ? { hint: hints[code] } : {}),
       ...(error instanceof CloudSetupError && Number.isInteger(error.status) ? { httpStatus: error.status } : {}),
-      resumeSameState: ['apply', 'resume', 'verify'].includes(command) || command === 'upgrade' && ['run', 'resume', 'cancel'].includes(action), usage,
+      resumeSameState: ['apply', 'resume', 'verify'].includes(command) || command === 'upgrade' && ['run', 'resume', 'verify', 'cancel'].includes(action), usage,
       ...(code.includes('credential') || code.includes('runtime-fly-token') ? { credentialEnvironment: CLOUD_CREDENTIAL_ENV } : {}),
       ...(code.includes('certificate') || code.includes('not-ready') || code.includes('provider') ? { prerequisites: CLOUD_ACCEPTANCE_PREREQUISITES } : {}),
     } });

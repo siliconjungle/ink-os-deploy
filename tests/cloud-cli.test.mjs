@@ -116,6 +116,6 @@ test('package commands and documented cloud JSON execute the actual offline CLI 
   const cli = fileURLToPath(new URL('../' + metadata.bin['ink-os-cloud'], import.meta.url));
   const help = spawnSync(process.execPath, [cli, '--help'], { env: {}, encoding: 'utf8' }); assert.equal(help.status, 0, help.stderr);
   const contract = JSON.parse(help.stdout); for (const command of ['plan', 'apply', 'resume', 'status', 'replace-runtime-credential', 'verify', 'prepare-restart', '--restart-receipt']) assert.ok(contract.usage.includes(command));
-  assert.deepEqual(contract.upgradeActions, ['plan', 'run', 'resume', 'status', 'cancel', 'abandon']);
+  assert.deepEqual(contract.upgradeActions, ['plan', 'run', 'resume', 'status', 'verify', 'cancel', 'abandon']);
   if (process.platform !== 'win32') assert.equal((await stat(cli)).mode & 0o111, 0o111);
 });

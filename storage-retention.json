@@ -19,11 +19,15 @@
     ".local/cloud/new-instance": "Operator-created private journal/credentials at the documented destination; protected recovery inputs, never a disposable build output.",
     "lib/cloud-verification.mjs": "Selected-source hosted verifier, bound historical acceptance and crash-safe private receipts.",
     "tests/cloud-verification.test.mjs": "Actual owner SDK/verifier/edge integration, replay and cleanup gates with explicit platform input.",
+    "lib/cloud-upgrade-verification.mjs": "Selected current-generation verifier/SDK source graph, bound nonempty-safe acceptance receipts and historical status validation.",
+    "tests/cloud-upgrade-verification.test.mjs": "Actual current verifier/owner SDK/edge HTTP fixtures, nonempty-host preservation, generation/receipt binding and lost-reply/security proofs.",
     "lib/cloud-upgrades.mjs": "Bound image upgrade/cancellation intents, exact provider lease/CAS reconciliation, bootstrap evidence and current-image lineage.",
     "tests/cloud-upgrades.test.mjs": "Provider-contract, cancellation/stop races and recovery, active-work preservation, image lineage and restart/evidence regression proofs.",
     "tests/cloud-upgrade-cli.test.mjs": "Actual CLI upgrade/cancellation lifecycle, private credentials, immutable provisioning and generation-aware historical readiness proofs.",
     ".local/cloud/new-instance/current-images.json": "Operator-owned current image generation and separately proof-bound lastCancellation lineage; never disposable output.",
-    ".local/cloud/new-instance/upgrades": "Operator-owned immutable upgrade intents, private progress/leases and retained transition/bootstrap/cancellation evidence and receipts."
+    ".local/cloud/new-instance/upgrades": "Operator-owned immutable upgrade intents, private progress/leases and retained transition/bootstrap/cancellation evidence and receipts.",
+    ".local/cloud/new-instance/upgrade-verification.json": "Operator-owned current-generation verifier attempt and hash-bound historical acceptance pointer.",
+    ".local/cloud/new-instance/upgrade-verification": "Operator-owned nonce canary journals, selected-source bindings, proofs and current-generation verification receipts; protected recovery inputs."
   },
   "safe_to_remove": {}
 }

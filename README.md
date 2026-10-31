@@ -144,7 +144,26 @@ An empty slots array is valid only when the observed pool is empty. Otherwise in
 npm run cloud -- upgrade run --operation RETURNED_OPERATION_ID --bootstrap-receipt /private/bootstrap-receipt.json --bootstrap-evidence /private/bootstrap-observations.json --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
 ```
 
-The private `current-images.json` and `upgrades/` directory retain image generation, intent, progress, raw bootstrap evidence and hash-bound receipts. Keep them with the original private state. `status` revalidates that lineage and shows `generation`, `currentImages` and `activeUpgrade`. For later generations, original `ready`/canary results appear only under `historicalProvisioning`, labeled `historical-original-provisioning`. Current acceptance is **`post-upgrade-runtime-use-pending`**, or **`bootstrap-automatic-proof-pending`** for bootstrap. Image transition/health proof is not full application or runtime acceptance. The original empty-host `verify` workflow refuses later generations; a separate nonempty-safe post-upgrade acceptance workflow is required. Repeated completed `apply`/`resume` stay offline and preserve this distinction.
+The private `current-images.json` and `upgrades/` directory retain image generation, intent, progress, raw bootstrap evidence and hash-bound receipts. Keep them with the original private state. `status` revalidates that lineage and shows `generation`, `currentImages` and `activeUpgrade`. For later generations, original `ready`/canary results appear only under `historicalProvisioning`, labeled `historical-original-provisioning`. Current acceptance starts at **`post-upgrade-runtime-use-pending`**, or **`bootstrap-automatic-proof-pending`** for bootstrap. The original empty-host `verify` workflow refuses later generations. Repeated completed `apply`/`resume` stay offline and preserve this distinction.
+
+After completing an upgrade, explicitly exercise the current generation without requiring an empty computer:
+
+```sh
+npm run cloud -- upgrade verify --phase run --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+npm run cloud -- status --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+This invokes the selected platform's `verifyUpgradedHost` export and its bounded, hash-checked SDK dependency graph. It loads the saved private owner token and uses no Fly/Cloudflare credentials. Public health identity is checked before owner requests; authenticated inspection binds the actual open host's images and stable boot to the current generation and immutable upgrade receipt. It creates, invokes and purges only its nonce-owned canary, verifies state `1`, owner/edge authentication and source privacy, waits only for its own naturally idle worker, and requires acknowledged source-blob cleanup. Existing apps/data and unrelated busy or held workers are preserved. It never invokes user commands, globally reaps workers or restarts the host.
+
+Automatic generations with a valid proof become **`post-upgrade-runtime-verified`**. Bootstrap retains **`bootstrap-automatic-proof-pending`** even when `acceptance.pooledBackendCanary` is `passed`; an actual automatic maintenance proof remains separate. This canary does not claim pre-upgrade state restart persistence, graphical browser behavior or compatibility of each installed/custom runtime app. Status and repeated completed verification return historical evidence with `liveAudit: "not-performed"`. Later generations or changed upgrade receipts cannot inherit an older proof.
+
+Retry `upgrade verify --phase run` with the same paths after a lost reply. Its separate private `upgrade-verification.json` and `upgrade-verification/` retain the attempt, exact verifier sources, canary journal, proof and acceptance receipt; they do not alter the original provisioning journal or image-transition receipt. A missing active journal after a mutation attempt is never recreated. For explicit recovery cleanup:
+
+```sh
+npm run cloud -- upgrade verify --phase cleanup --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform
+```
+
+Cleanup can remove owned remnants after images change, but cannot promote acceptance. A lost purge acknowledgement remains **`cleanup-acknowledgement-pending`**, even when the canary is absent. Only a completed, validated proof with acknowledged cleanup promotes current runtime acceptance. Caller-provided proof JSON, restart commands and provider credentials are not accepted by this command.
 
 ```sh
 npm run cloud -- upgrade abandon --operation RETURNED_OPERATION_ID --config cloud.json --state .local/cloud/new-instance --platform-root ../ink-os-platform

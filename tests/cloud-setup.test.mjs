@@ -150,6 +150,7 @@ test('real adapters execute complete setup through fake HTTP, retain private run
   const before = cloud.calls.length;
   await assert.rejects(runCloudSetup({ ...args, credentials: { ...credentials(), runtimeFlyToken: 'changed-secret-'.repeat(4) }, fetch: cloud.fetch }), /runtime-token-change/);
   assert.equal(cloud.calls.length, before);
+  assert.equal(JSON.parse(await readFile(join(path, 'secrets.json'))).runtimeFlyToken, credentials().runtimeFlyToken);
   assert.ok(!JSON.stringify(osMachineConfig(validateCloudConfig(config()), plan.resources, 'vol_1')).includes(privateSecrets.ownerToken));
 });
 
@@ -199,7 +200,10 @@ test('existing TLS mode never purchases certificates, and existing foreign names
 test('completed resources disappearing, foreign DNS/worker/machine drift fail closed without replacement', async t => {
   for (const mutate of [cloud => { cloud.bucket = null; }, cloud => { cloud.dns[0].comment = 'foreign'; }, cloud => { cloud.workers.values().next().value.bindings[0].bucket_name = 'foreign'; }, cloud => { cloud.machines[0].config.metadata.ink_os_instance = 'foreign'; }]) {
     const path = await directory(t), args = { directory: path, config: config(), artifacts: artifacts() }, plan = await initializeCloudSetup(args), cloud = fakeCloud(plan);
-    await runCloudSetup({ ...args, credentials: credentials(), fetch: cloud.fetch }); const before = cloud.mutations.length;
+    // Keep provisioning active: completed apply is historical status, not a maintenance audit.
+    cloud.healthId = 'not-ready';
+    await assert.rejects(runCloudSetup({ ...args, credentials: credentials(), fetch: cloud.fetch }), /instance-mismatch/);
+    cloud.healthId = plan.instanceId; const before = cloud.mutations.length;
     mutate(cloud); await assert.rejects(runCloudSetup({ ...args, credentials: credentials(), fetch: cloud.fetch }), /drift|conflict/); assert.equal(cloud.mutations.length, before);
     assert.equal((await describeCloudSetup(args)).status, 'attention');
   }
@@ -311,7 +315,11 @@ test('explicit shared-zone routing uses existing TLS and DNS read-only with a di
   assert.equal(cloud.workers.get(n.edgeWorker).bindings.find(b=>b.name==='APP_HOST_SUFFIX').text,n.appHostSuffix);
   assert.ok(!cloud.mutations.some(m=>m.path.endsWith('/dns_records')||m.path.endsWith('/ssl/certificate_packs/order')));
   const count=cloud.mutations.length;await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});assert.equal(cloud.mutations.length,count);
-  cloud.dns[0].content='192.0.2.9';await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/completed-resource-drift/);
+  // Provider drift belongs to active provisioning; completed apply above is historical status.
+  const activeArgs={...args,directory:await directory(t)},activePlan=await initializeCloudSetup(activeArgs),activeCloud=fakeCloud(activePlan,cfg);
+  activeCloud.dns.push(structuredClone(shared));activeCloud.packs.push({id:'zone_certificate',hosts:[cfg.cloudflare.zoneName,'*.'+cfg.cloudflare.zoneName],status:'active'});
+  activeCloud.healthId='not-ready';await assert.rejects(runCloudSetup({...activeArgs,credentials:credentials(),fetch:activeCloud.fetch}),/instance-mismatch/);activeCloud.healthId=activePlan.instanceId;
+  const activeCount=activeCloud.mutations.length;activeCloud.dns[0].content='192.0.2.9';await assert.rejects(runCloudSetup({...activeArgs,credentials:credentials(),fetch:activeCloud.fetch}),/completed-resource-drift/);assert.equal(activeCloud.mutations.length,activeCount);
 });
 
 test('shared-zone routing requires existing proxied wildcard and never creates one or purchases certificates', async t => {
@@ -326,7 +334,8 @@ test('shared-zone routing requires existing proxied wildcard and never creates o
 test('Fly normalized mount facts are accepted while changed volume, path, encryption or extra mounts remain conflicts', async t => {
   for(const mutate of [m=>m.config.mounts[0].volume='foreign_volume',m=>m.config.mounts[0].path='/other',m=>m.config.mounts[0].encrypted=false,m=>m.config.mounts[0].size_gb++,m=>m.config.mounts[0].name='foreign_name',m=>m.config.mounts.push({...m.config.mounts[0],path:'/extra'}),m=>m.config.mounts[0].read_only=true]){
     const args={directory:await directory(t),config:config(),artifacts:artifacts()},plan=await initializeCloudSetup(args),cloud=fakeCloud(plan);
-    await runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch});mutate(cloud.machines[0]);
+    // Keep provisioning active; normalized mounts were checked before the health gate failed.
+    cloud.healthId='not-ready';await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/instance-mismatch/);cloud.healthId=plan.instanceId;mutate(cloud.machines[0]);
     const before=cloud.mutations.length;await assert.rejects(runCloudSetup({...args,credentials:credentials(),fetch:cloud.fetch}),/resource-ownership-or-configuration-conflict/);assert.equal(cloud.mutations.length,before);
   }
 });

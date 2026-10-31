@@ -16,7 +16,9 @@
     "lib/cloud-acceptance.mjs": "Resumable exact-byte OS/R2 storage proof and scoped cleanup.",
     "tests/cloud-cli.test.mjs": "Offline executable, documentation/configuration and private-input proofs.",
     "tests/cloud-setup.test.mjs": "Provider/recovery/credential/TLS/state/acceptance regression proofs.",
-    ".local/cloud/new-instance": "Operator-created private journal/credentials at the documented destination; protected recovery inputs, never a disposable build output."
+    ".local/cloud/new-instance": "Operator-created private journal/credentials at the documented destination; protected recovery inputs, never a disposable build output.",
+    "lib/cloud-verification.mjs": "Selected-source hosted verifier, bound historical acceptance and crash-safe private receipts.",
+    "tests/cloud-verification.test.mjs": "Actual owner SDK/verifier/edge integration, replay and cleanup gates with explicit platform input."
   },
   "safe_to_remove": {}
 }

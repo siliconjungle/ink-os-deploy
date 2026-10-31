@@ -80,6 +80,26 @@ test('TLS choice must precede planning, and explicit private runtime credential 
   assert.ok(!corrected.output.includes(runtimeToken)); assert.equal(JSON.parse(await readFile(join(f.directory, 'secrets.json'))).runtimeFlyToken, runtimeToken);
 });
 
+test('verify requires an explicit phase/selected source and never accepts passed JSON or credentials in argv', async t => {
+  const f = await fixture(t); await f.invoke('plan');
+  for (const extra of [[], ['--phase', 'passed'], ['--phase', 'run', '--proof', 'passed.json'], ['--phase', 'run', '--token', 'never-serialize-this-private-value']]) {
+    const result = await f.invoke('verify', { argv: ['verify', ...f.args, ...extra] }); assert.equal(result.status, 1); assert.ok(!result.errors.includes('never-serialize-this-private-value'));
+  }
+  const premature = await f.invoke('verify', { argv: ['verify', ...f.args, '--phase', 'run'], fetch: () => assert.fail('unprovisioned verifier must be offline') });
+  assert.equal(premature.result.error.code, 'provision-cloud-before-hosted-verification');
+  const journal = JSON.parse(await readFile(join(f.directory, 'journal.json')));
+  for (const step of journal.plan.steps) journal.steps[step] = { status: 'done', attempt: '0'.repeat(32), receipt: { id: step } };
+  journal.storageProof = { stage: 'complete' }; journal.status = 'acceptance-pending';
+  await writeFile(join(f.directory, 'journal.json'), JSON.stringify(journal), { mode: 0o600 });
+  for (const command of ['apply', 'resume']) {
+    const result = await f.invoke(command, { fetch: () => assert.fail('completed provisioning is offline') });
+    assert.equal(result.status, 0); assert.equal(result.result.deployment.status, 'acceptance-pending'); assert.equal(result.result.deployment.provisioning.status, 'complete');
+  }
+  const changed = await f.invoke('apply', { env: { INK_CLOUD_RUNTIME_FLY_TOKEN: 'different-private-runtime-token-'.repeat(3) }, fetch: () => assert.fail('credential comparison is offline') });
+  assert.equal(changed.result.error.code, 'runtime-token-change-requires-explicit-correction');
+  assert.equal((await f.invoke('status')).result.deployment.status, 'acceptance-pending');
+});
+
 test('package commands and documented cloud JSON execute the actual offline CLI without changing Compose entry points', async t => {
   const metadata = JSON.parse(await readFile(new URL('../package.json', import.meta.url))), readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
   assert.equal(metadata.bin['ink-os-cloud'], 'cli/cloud.mjs');
@@ -94,6 +114,6 @@ test('package commands and documented cloud JSON execute the actual offline CLI 
   assert.ok(result.result.deployment.acceptanceRequired.includes('pooled-backend-canary-and-cleanup')); assert.match(readme, /acceptance-pending/);
   const cli = fileURLToPath(new URL('../' + metadata.bin['ink-os-cloud'], import.meta.url));
   const help = spawnSync(process.execPath, [cli, '--help'], { env: {}, encoding: 'utf8' }); assert.equal(help.status, 0, help.stderr);
-  const contract = JSON.parse(help.stdout); for (const command of ['plan', 'apply', 'resume', 'status', 'replace-runtime-credential']) assert.ok(contract.usage.includes(command));
+  const contract = JSON.parse(help.stdout); for (const command of ['plan', 'apply', 'resume', 'status', 'replace-runtime-credential', 'verify', 'prepare-restart', '--restart-receipt']) assert.ok(contract.usage.includes(command));
   if (process.platform !== 'win32') assert.equal((await stat(cli)).mode & 0o111, 0o111);
 });
